@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 
 import 'file_type.dart';
@@ -15,6 +17,7 @@ class FlutterShareMe {
   static const String _methodMessenger = 'messenger_share';
   static const String _methodTwitter = 'twitter_share';
   static const String _methodInstagramShare = 'instagram_share';
+  static const String _methodInstagramShareMultiple = 'instagram_share_multiple';
   static const String _methodSystemShare = 'system_share';
   static const String _methodTelegramShare = 'telegram_share';
 
@@ -161,9 +164,10 @@ class FlutterShareMe {
 
   ///share file to instagram
   Future<String?> shareToInstagram(
-      {required String filePath, FileType fileType = FileType.image}) async {
+      {required String filePath, FileType fileType = FileType.image, required String appId,}) async {
     final Map<String, dynamic> arguments = <String, dynamic>{};
     arguments.putIfAbsent('url', () => filePath);
+    arguments.putIfAbsent('appId', () => appId);
     if (fileType == FileType.image) {
       arguments.putIfAbsent('fileType', () => 'image');
     } else {
@@ -174,6 +178,31 @@ class FlutterShareMe {
     try {
       result =
           await _channel.invokeMethod<String>(_methodInstagramShare, arguments);
+    } catch (e) {
+      return e.toString();
+    }
+    return result;
+  }
+
+  ///share multiple files to instagram - Android only
+  Future<String?> shareToInstagramMultiple(
+      {required List<String> filePaths, FileType fileType = FileType.image, required String appId,}) async {
+    if (!Platform.isAndroid) {
+      return Future<String?>.error('Supported only for Android');
+    }
+    final Map<String, dynamic> arguments = <String, dynamic>{};
+    arguments.putIfAbsent('urls', () => filePaths);
+    arguments.putIfAbsent('appId', () => appId);
+    if (fileType == FileType.image) {
+      arguments.putIfAbsent('fileType', () => 'image');
+    } else {
+      arguments.putIfAbsent('fileType', () => 'video');
+    }
+    String? result;
+
+    try {
+      result =
+      await _channel.invokeMethod<String>(_methodInstagramShareMultiple, arguments);
     } catch (e) {
       return e.toString();
     }

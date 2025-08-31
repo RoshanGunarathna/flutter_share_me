@@ -187,16 +187,46 @@ public class SwiftFlutterShareMePlugin: NSObject, FlutterPlugin, SharingDelegate
     
     func sharefacebook(message:Dictionary<String,Any>, result: @escaping FlutterResult)  {
         let viewController = UIApplication.shared.delegate?.window??.rootViewController
-        //let shareDialog = ShareDialog()
-        let shareContent = ShareLinkContent()
-        shareContent.contentURL = URL.init(string: message["url"] as! String)!
-        shareContent.quote = message["msg"] as? String
-        
-        let shareDialog = ShareDialog(viewController: viewController, content: shareContent, delegate: self)
-        shareDialog.mode = .automatic
-        shareDialog.show()
-        result("Sucess")
-        
+        let urlString = message["url"] as! String
+        let msg = message["msg"] as? String
+
+        if urlString.hasPrefix("/") || urlString.hasPrefix("file://") {
+            // Local file path
+            let finalUrlString = urlString.replacingOccurrences(of: "file://", with: "")
+            let image = UIImage(contentsOfFile: finalUrlString)
+            if (image == nil) {
+                result(FlutterError(code: "Not found", message: "Image not found at path", details: finalUrlString))
+                return
+            }
+            let photo = SharePhoto(image: image!, isUserGenerated: true)
+            let shareContent = SharePhotoContent()
+            shareContent.photos = [photo]
+            
+            // For sharing photos, the Facebook SDK doesn't allow pre-filled messages.
+            // As a workaround, we can copy the message to the clipboard.
+            if(msg != nil && msg != ""){
+                UIPasteboard.general.string = msg
+            }
+
+            let shareDialog = ShareDialog(viewController: viewController, content: shareContent, delegate: self)
+            shareDialog.mode = .automatic
+            shareDialog.show()
+            result("Success, message copied to clipboard.")
+        } else {
+            // URL
+            let shareContent = ShareLinkContent()
+            if let url = URL.init(string: urlString) {
+                shareContent.contentURL = url
+                shareContent.quote = msg
+
+                let shareDialog = ShareDialog(viewController: viewController, content: shareContent, delegate: self)
+                shareDialog.mode = .automatic
+                shareDialog.show()
+                result("Success")
+            } else {
+                result(FlutterError(code: "Invalid URL", message: "The provided URL is invalid", details: urlString))
+            }
+        }
     }
     
     // share twitter params
