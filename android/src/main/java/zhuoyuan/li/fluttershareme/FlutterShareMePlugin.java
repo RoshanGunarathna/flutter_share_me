@@ -19,13 +19,14 @@ import com.facebook.share.Sharer;
 import com.facebook.share.model.ShareLinkContent;
 import com.facebook.share.widget.MessageDialog;
 import com.facebook.share.widget.ShareDialog;
-import com.twitter.sdk.android.tweetcomposer.TweetComposer;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
@@ -35,7 +36,6 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 /**
  * FlutterShareMePlugin
@@ -50,21 +50,13 @@ public class FlutterShareMePlugin implements MethodCallHandler, FlutterPlugin, A
     final private static String _methodTwitter = "twitter_share";
     final private static String _methodSystemShare = "system_share";
     final private static String _methodInstagramShare = "instagram_share";
+    final private static String _methodInstagramShareMultiple = "instagram_share_multiple";
     final private static String _methodTelegramShare = "telegram_share";
 
 
     private Activity activity;
     private static CallbackManager callbackManager;
     private MethodChannel methodChannel;
-
-    /**
-     * Plugin registration.
-     */
-    public static void registerWith(Registrar registrar) {
-        final FlutterShareMePlugin instance = new FlutterShareMePlugin();
-        instance.onAttachedToEngine(registrar.messenger());
-        instance.activity = registrar.activity();
-    }
 
     @Override
     public void onAttachedToEngine(FlutterPluginBinding binding) {
@@ -92,7 +84,7 @@ public class FlutterShareMePlugin implements MethodCallHandler, FlutterPlugin, A
      */
     @Override
     public void onMethodCall(MethodCall call, @NonNull Result result) {
-        String url, msg, fileType;
+        String url, msg, fileType, appId;
         switch (call.method) {
             case _methodFaceBook:
                 url = call.argument("url");
@@ -105,9 +97,7 @@ public class FlutterShareMePlugin implements MethodCallHandler, FlutterPlugin, A
                 shareToMessenger(url, msg, result);
                 break;
             case _methodTwitter:
-                url = call.argument("url");
-                msg = call.argument("msg");
-                shareToTwitter(url, msg, result);
+                result.notImplemented();
                 break;
             case _methodWhatsApp:
                 msg = call.argument("msg");
@@ -131,7 +121,14 @@ public class FlutterShareMePlugin implements MethodCallHandler, FlutterPlugin, A
             case _methodInstagramShare:
                 msg = call.argument("url");
                 fileType = call.argument("fileType");
-                shareInstagramStory(msg, fileType, result);
+                appId = call.argument("appId");
+                shareInstagramStory(msg, fileType, appId, result);
+                break;
+            case _methodInstagramShareMultiple:
+                List<String> files = call.argument("urls");
+                fileType = call.argument("fileType");
+                appId = call.argument("appId");
+                shareInstagramMultiple(files, fileType, appId, result);
                 break;
             case _methodTelegramShare:
                 msg = call.argument("msg");
@@ -170,18 +167,7 @@ public class FlutterShareMePlugin implements MethodCallHandler, FlutterPlugin, A
      */
 
     private void shareToTwitter(String url, String msg, Result result) {
-        try {
-            TweetComposer.Builder builder = new TweetComposer.Builder(activity)
-                    .text(msg);
-            if (url != null && url.length() > 0) {
-                builder.url(new URL(url));
-            }
-
-            builder.show();
-            result.success("success");
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        }
+        result.error("error", "Unsupported", "");
     }
 
     /**
@@ -343,7 +329,7 @@ public class FlutterShareMePlugin implements MethodCallHandler, FlutterPlugin, A
      * @param fileType type of file to share (image or video)
      * @param result   flutterResult
      */
-    private void shareInstagramStory(String url, String fileType, Result result) {
+    private void shareInstagramStory(String url, String fileType, String appId, Result result) {
         if (instagramInstalled()) {
             File file = new File(url);
             Uri fileUri = FileProvider.getUriForFile(activity, activity.getApplicationContext().getPackageName() + ".provider", file);
@@ -353,7 +339,38 @@ public class FlutterShareMePlugin implements MethodCallHandler, FlutterPlugin, A
                 instagramIntent.setType("image/*");
             else if(fileType.equals("video"))
                 instagramIntent.setType("video/*");
+            instagramIntent.putExtra("source_application", appId);
             instagramIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+            instagramIntent.setPackage("com.instagram.android");
+            try {
+                activity.startActivity(instagramIntent);
+                result.success("Success");
+            } catch (ActivityNotFoundException e) {
+                e.printStackTrace();
+                result.success("Failure");
+            }
+        } else {
+            result.error("Instagram not found", "Instagram is not installed on device.", "");
+        }
+    }
+
+    private void shareInstagramMultiple(List<String> urls, String fileType, String appId, Result result) {
+        if (instagramInstalled()) {
+            ArrayList<Uri> fileUris = new ArrayList<>();
+            for (String url: urls) {
+
+                File file = new File(url);
+                Uri fileUri = FileProvider.getUriForFile(activity, activity.getApplicationContext().getPackageName() + ".provider", file);
+                fileUris.add(fileUri);
+            }
+
+            Intent instagramIntent = new Intent(Intent.ACTION_SEND_MULTIPLE);
+            if(fileType.equals("image"))
+                instagramIntent.setType("image/*");
+            else if(fileType.equals("video"))
+                instagramIntent.setType("video/*");
+            instagramIntent.putExtra("source_application", appId);
+            instagramIntent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, fileUris);
             instagramIntent.setPackage("com.instagram.android");
             try {
                 activity.startActivity(instagramIntent);
